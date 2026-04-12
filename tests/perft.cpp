@@ -1,3 +1,6 @@
+#include "chess.hpp"
+using namespace chess;
+
 uint64_t perft(Board &board, int depth)
 {
     Movelist moves;
@@ -19,4 +22,17 @@ uint64_t perft(Board &board, int depth)
     }
 
     return nodes;
+}
+
+int main()
+{
+    Board board;
+
+    for (int depth = 1; depth <= 6; depth++)
+    {
+        uint64_t nodes = perft(board, depth);
+        std::cout << "Depth " << depth << ": " << nodes << " nodes" << std::endl;
+    }
+    std::cin.get();
+    return 0;
 }
