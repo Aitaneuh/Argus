@@ -33,6 +33,7 @@ int main()
         uint64_t nodes = perft(board, depth);
         std::cout << "Depth " << depth << ": " << nodes << " nodes" << std::endl;
     }
+    std::cout << "Perft test terminated." << std::endl;
     std::cin.get();
     return 0;
 }
