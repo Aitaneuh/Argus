@@ -51,7 +51,7 @@ void uciLoop()
 
         if (token == "uci")
         {
-            std::cout << "id name Chessy\n";
+            std::cout << "id name Argus\n";
             std::cout << "id author Aitaneuh\n";
             std::cout << "uciok\n";
         }
