@@ -1,11 +1,11 @@
 #include <sstream>
 #include <iostream>
 #include <string>
-#include <random>
 
 #include "uci.h"
 #include "chess.hpp"
-// #include "engine/search.h"
+#include "engine/search.h"
+
 using namespace chess;
 
 void parsePosition(Board &board, std::istringstream &iss)
@@ -42,7 +42,6 @@ void uciLoop()
 {
     Board board;
     std::string line, token;
-    std::mt19937 rng(std::random_device{}());
 
     while (std::getline(std::cin, line))
     {
@@ -77,16 +76,13 @@ void uciLoop()
             Movelist legal_moves;
             movegen::legalmoves(legal_moves, board);
 
-            // Move best = search(board);
-
             if (legal_moves.size() == 0)
             {
                 std::cout << "bestmove 0000\n"; // UCI way to say no move
             }
             else
             {
-                std::uniform_int_distribution<int> dist(0, legal_moves.size() - 1);
-                Move best = legal_moves[dist(rng)];
+                Move best = search(board, legal_moves);
                 std::cout << "bestmove " << uci::moveToUci(best) << "\n";
             }
         }

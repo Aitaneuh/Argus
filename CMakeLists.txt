@@ -8,6 +8,7 @@ include_directories(lib/chess-library)
 
 file(GLOB_RECURSE SOURCES src/*.cpp)
 add_executable(Argus ${SOURCES})
+target_include_directories(Argus PRIVATE src/)
 
 add_executable(Perft tests/perft.cpp)
 target_include_directories(Perft PRIVATE lib/chess-library)
