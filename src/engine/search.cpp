@@ -2,43 +2,25 @@
 #include "movesort.h"
 #include "evaluate.h"
 #include "chess.hpp"
-#include <random>
 
 using namespace chess;
 
-float minimax(Board board, int depth, bool white_to_play, float alpha, float beta)
+const int INF = 99999999;
+
+int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
 {
-    Square opposing_king_sq;
-    Color ally_color;
-    Color opponent_color;
-
-    if (white_to_play)
-    {
-        ally_color = Color::WHITE;
-        opponent_color = Color::BLACK;
-    }
-    else
-    {
-        ally_color = Color::BLACK;
-        opponent_color = Color::WHITE;
-    }
-
     Movelist legal_moves;
     movegen::legalmoves(legal_moves, board);
 
-    // checkmate win
-    if (board.isAttacked(board.kingSq(opponent_color), ally_color) and legal_moves.size() == 0)
+    if (legal_moves.size() == 0)
     {
-        return 100000 + depth;
+        if (board.inCheck())
+            return white_to_play ? -100000 - depth : 100000 + depth;
+        else
+            return 0; // stalemate
     }
 
-    // checkmate lose
-    if (board.isAttacked(board.kingSq(ally_color), opponent_color) and legal_moves.size() == 0)
-    {
-        return -100000 - depth;
-    }
-
-    if (legal_moves.size() == 0 or depth == 0)
+    if (depth == 0)
     {
         return evaluate(board);
     }
@@ -47,102 +29,87 @@ float minimax(Board board, int depth, bool white_to_play, float alpha, float bet
 
     if (white_to_play)
     {
-        float best_eval = -INFINITY;
+        int best_eval = -INF;
         for (int i = 0; i < sorted_moves.size(); i++)
         {
             board.makeMove(sorted_moves[i]);
-            float eval = minimax(board, depth - 1, false, alpha, beta);
+            int eval = minimax(board, depth - 1, false, alpha, beta);
             board.unmakeMove(sorted_moves[i]);
 
             if (eval > best_eval)
-            {
                 best_eval = eval;
-            }
             if (best_eval > alpha)
-            {
                 alpha = best_eval;
-            }
             if (beta <= alpha)
-            {
                 break;
-            }
         }
         return best_eval;
     }
     else
     {
-        float best_eval = INFINITY;
+        int best_eval = INF;
         for (int i = 0; i < sorted_moves.size(); i++)
         {
             board.makeMove(sorted_moves[i]);
-            float eval = minimax(board, depth - 1, true, alpha, beta);
+            int eval = minimax(board, depth - 1, true, alpha, beta);
             board.unmakeMove(sorted_moves[i]);
 
             if (eval < best_eval)
-            {
                 best_eval = eval;
-            }
             if (best_eval < beta)
-            {
                 beta = best_eval;
-            }
             if (beta <= alpha)
-            {
                 break;
-            }
         }
         return best_eval;
     }
 }
 
-Move search(Board board, Movelist legal_moves, int depth)
+Move search(Board &board, int depth)
 {
-    Move best_move;
+    Movelist legal_moves;
+    movegen::legalmoves(legal_moves, board);
 
-    Movelist sorted_moves = sort_moves(legal_moves);
-    bool white_to_play = board.fullMoveNumber() % 2 == 0;
+    Move best_move = legal_moves[0];
+    bool white_to_play = board.sideToMove() == Color::WHITE;
 
-    float alpha = -INFINITY;
-    float beta = INFINITY;
+    int alpha = -INF;
+    int beta = INF;
 
     if (white_to_play)
     {
-        float best_eval = -INFINITY;
-        for (int i = 0; i < sorted_moves.size(); i++)
+        int best_eval = -INF;
+        for (int i = 0; i < legal_moves.size(); i++)
         {
-            board.makeMove(sorted_moves[i]);
-            float eval = minimax(board, depth - 1, false, alpha, beta);
-            board.unmakeMove(sorted_moves[i]);
+            board.makeMove(legal_moves[i]);
+            int eval = minimax(board, depth - 1, false, alpha, beta);
+            board.unmakeMove(legal_moves[i]);
 
             if (eval > best_eval)
             {
                 best_eval = eval;
-                best_move = sorted_moves[i];
+                best_move = legal_moves[i];
             }
             if (best_eval > alpha)
-            {
                 alpha = best_eval;
-            }
         }
     }
     else
     {
-        float best_eval = INFINITY;
-        for (int i = 0; i < sorted_moves.size(); i++)
+        int best_eval = INF;
+        for (int i = 0; i < legal_moves.size(); i++)
         {
-            board.makeMove(sorted_moves[i]);
-            float eval = minimax(board, depth - 1, true, alpha, beta);
-            board.unmakeMove(sorted_moves[i]);
+            board.makeMove(legal_moves[i]);
+            int eval = minimax(board, depth - 1, true, alpha, beta);
+            board.unmakeMove(legal_moves[i]);
 
             if (eval < best_eval)
             {
                 best_eval = eval;
-                best_move = sorted_moves[i];
+                best_move = legal_moves[i];
             }
             if (best_eval < beta)
-            {
                 beta = best_eval;
-            }
         }
     }
 
