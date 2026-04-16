@@ -68,10 +68,7 @@ void uciLoop()
         }
         else if (token == "go")
         {
-            int depth = 5, score_cp = 0, nodes = 0, nps = 0;
-            Movelist move_list_uci;
-
-            // std::cout << "info depth " << depth << " score cp " << score_cp << " nodes " << nodes << " nps " << nps << " pv " << move_list_uci << std::endl;
+            int depth = 6;
 
             Movelist legal_moves;
             movegen::legalmoves(legal_moves, board);
@@ -82,8 +79,15 @@ void uciLoop()
             }
             else
             {
-                Move best = search(board, depth);
-                std::cout << "bestmove " << uci::moveToUci(best) << "\n";
+                SearchResult result = search(board, depth);
+
+                std::cout << "info depth " << depth
+                          << " score cp " << result.score_cp
+                          << " nodes " << result.nodes
+                          << " nps " << result.nps
+                          << "\n";
+
+                std::cout << "bestmove " << uci::moveToUci(result.best_move) << "\n";
             }
         }
         else if (token == "quit")

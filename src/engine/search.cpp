@@ -2,17 +2,20 @@
 #include "movesort.h"
 #include "evaluate.h"
 #include "chess.hpp"
+#include <chrono>
 
 using namespace chess;
 
 const int INF = 99999999;
+static int node_count = 0;
 
 int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
 {
-    Movelist legal_moves;
-    movegen::legalmoves(legal_moves, board);
+    node_count++;
+    Movelist moves;
+    movegen::legalmoves(moves, board);
 
-    if (legal_moves.size() == 0)
+    if (moves.size() == 0)
     {
         if (board.inCheck())
             return white_to_play ? -100000 - depth : 100000 + depth;
@@ -25,16 +28,16 @@ int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
         return evaluate(board);
     }
 
-    Movelist sorted_moves = sort_moves(legal_moves);
+    sort_moves(moves);
 
     if (white_to_play)
     {
         int best_eval = -INF;
-        for (int i = 0; i < sorted_moves.size(); i++)
+        for (int i = 0; i < moves.size(); i++)
         {
-            board.makeMove(sorted_moves[i]);
+            board.makeMove(moves[i]);
             int eval = minimax(board, depth - 1, false, alpha, beta);
-            board.unmakeMove(sorted_moves[i]);
+            board.unmakeMove(moves[i]);
 
             if (eval > best_eval)
                 best_eval = eval;
@@ -48,11 +51,11 @@ int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
     else
     {
         int best_eval = INF;
-        for (int i = 0; i < sorted_moves.size(); i++)
+        for (int i = 0; i < moves.size(); i++)
         {
-            board.makeMove(sorted_moves[i]);
+            board.makeMove(moves[i]);
             int eval = minimax(board, depth - 1, true, alpha, beta);
-            board.unmakeMove(sorted_moves[i]);
+            board.unmakeMove(moves[i]);
 
             if (eval < best_eval)
                 best_eval = eval;
@@ -65,30 +68,34 @@ int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
     }
 }
 
-Move search(Board &board, int depth)
+SearchResult search(Board &board, int depth)
 {
-    Movelist legal_moves;
-    movegen::legalmoves(legal_moves, board);
+    node_count = 0;
+    auto start = std::chrono::high_resolution_clock::now();
 
-    Move best_move = legal_moves[0];
+    Movelist moves;
+    movegen::legalmoves(moves, board);
+
+    Move best_move = moves[0];
     bool white_to_play = board.sideToMove() == Color::WHITE;
 
     int alpha = -INF;
     int beta = INF;
 
+    int best_eval = white_to_play ? -INF : INF;
+
     if (white_to_play)
     {
-        int best_eval = -INF;
-        for (int i = 0; i < legal_moves.size(); i++)
+        for (int i = 0; i < moves.size(); i++)
         {
-            board.makeMove(legal_moves[i]);
+            board.makeMove(moves[i]);
             int eval = minimax(board, depth - 1, false, alpha, beta);
-            board.unmakeMove(legal_moves[i]);
+            board.unmakeMove(moves[i]);
 
             if (eval > best_eval)
             {
                 best_eval = eval;
-                best_move = legal_moves[i];
+                best_move = moves[i];
             }
             if (best_eval > alpha)
                 alpha = best_eval;
@@ -96,22 +103,25 @@ Move search(Board &board, int depth)
     }
     else
     {
-        int best_eval = INF;
-        for (int i = 0; i < legal_moves.size(); i++)
+        for (int i = 0; i < moves.size(); i++)
         {
-            board.makeMove(legal_moves[i]);
+            board.makeMove(moves[i]);
             int eval = minimax(board, depth - 1, true, alpha, beta);
-            board.unmakeMove(legal_moves[i]);
+            board.unmakeMove(moves[i]);
 
             if (eval < best_eval)
             {
                 best_eval = eval;
-                best_move = legal_moves[i];
+                best_move = moves[i];
             }
             if (best_eval < beta)
                 beta = best_eval;
         }
     }
 
-    return best_move;
+    auto end = std::chrono::high_resolution_clock::now();
+    int elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    int nps = elapsed_ms > 0 ? (node_count * 1000) / elapsed_ms : 0;
+
+    return {best_move, best_eval, node_count, nps};
 }
