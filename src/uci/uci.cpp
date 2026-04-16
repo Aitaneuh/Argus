@@ -68,7 +68,7 @@ void uciLoop()
         }
         else if (token == "go")
         {
-            int depth = 0, score_cp = 0, nodes = 0, nps = 0;
+            int depth = 4, score_cp = 0, nodes = 0, nps = 0;
             Movelist move_list_uci;
 
             // std::cout << "info depth " << depth << " score cp " << score_cp << " nodes " << nodes << " nps " << nps << " pv " << move_list_uci << std::endl;
@@ -82,7 +82,7 @@ void uciLoop()
             }
             else
             {
-                Move best = search(board, legal_moves);
+                Move best = search(board, legal_moves, depth);
                 std::cout << "bestmove " << uci::moveToUci(best) << "\n";
             }
         }
