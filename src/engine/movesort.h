@@ -1,4 +1,4 @@
 #pragma once
 #include "chess.hpp"
 
-Movelist sort_moves(Movelist legal_move);
+chess::Movelist sort_moves(chess::Movelist legal_move);
