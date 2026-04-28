@@ -14,6 +14,7 @@ int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
     node_count++;
     Movelist moves;
     movegen::legalmoves(moves, board);
+    sort_moves(moves, board);
 
     if (moves.size() == 0)
     {
@@ -27,8 +28,6 @@ int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
     {
         return evaluate(board);
     }
-
-    sort_moves(moves);
 
     if (white_to_play)
     {
