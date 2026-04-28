@@ -122,7 +122,7 @@ go
 - [x] Legal move generation
 - [x] Alpha-beta pruning
 - [x] Material evaluation
-- [ ] MVV-LVA move ordering
+- [X] MVV-LVA move ordering
 - [ ] Piece-square tables (PST)
 - [ ] Iterative deepening
 - [ ] Transposition table
