@@ -1,6 +1,7 @@
 #include "search.h"
 #include "movesort.h"
 #include "evaluate.h"
+#include "tt.h"
 #include "chess.hpp"
 #include <chrono>
 
@@ -9,113 +10,99 @@ using namespace chess;
 const int INF = 99999999;
 static int node_count = 0;
 
-int minimax(Board &board, int depth, bool white_to_play, int alpha, int beta)
+int negamax(Board &board, int depth, int alpha, int beta)
 {
     node_count++;
-    Movelist moves;
-    movegen::legalmoves(moves, board);
-    sort_moves(moves, board);
 
-    if (moves.size() == 0)
+    uint64_t key = board.hash();
+    int origAlpha = alpha;
+
+    // --- TT Probe ---
+    TTEntry *entry = tt.probe(key);
+    if (entry && entry->depth >= depth)
     {
-        if (board.inCheck())
-            return white_to_play ? -100000 - depth : 100000 + depth;
-        else
-            return 0; // stalemate
+        if (entry->flag == TT_EXACT)
+            return entry->score;
+        if (entry->flag == TT_ALPHA)
+            beta = std::min(beta, entry->score);
+        if (entry->flag == TT_BETA)
+            alpha = std::max(alpha, entry->score);
+        if (alpha >= beta)
+            return entry->score;
     }
 
     if (depth == 0)
     {
-        return evaluate(board);
+        int score = evaluate(board);
+        return board.sideToMove() == Color::WHITE ? score : -score;
     }
 
-    if (white_to_play)
+    Movelist moves;
+    movegen::legalmoves(moves, board);
+
+    if (moves.size() == 0)
+        return board.inCheck() ? -(100000 + depth) : 0;
+
+    sort_moves(moves, board);
+
+    int bestScore = -INF;
+    uint16_t bestMove = 0;
+
+    for (int i = 0; i < moves.size(); i++)
     {
-        int best_eval = -INF;
-        for (int i = 0; i < moves.size(); i++)
-        {
-            board.makeMove(moves[i]);
-            int eval = minimax(board, depth - 1, false, alpha, beta);
-            board.unmakeMove(moves[i]);
+        board.makeMove(moves[i]);
+        int score = -negamax(board, depth - 1, -beta, -alpha);
+        board.unmakeMove(moves[i]);
 
-            if (eval > best_eval)
-                best_eval = eval;
-            if (best_eval > alpha)
-                alpha = best_eval;
-            if (beta <= alpha)
-                break;
-        }
-        return best_eval;
-    }
-    else
-    {
-        int best_eval = INF;
-        for (int i = 0; i < moves.size(); i++)
+        if (score > bestScore)
         {
-            board.makeMove(moves[i]);
-            int eval = minimax(board, depth - 1, true, alpha, beta);
-            board.unmakeMove(moves[i]);
-
-            if (eval < best_eval)
-                best_eval = eval;
-            if (best_eval < beta)
-                beta = best_eval;
-            if (beta <= alpha)
-                break;
+            bestScore = score;
+            bestMove = static_cast<uint16_t>(moves[i].move());
         }
-        return best_eval;
+        if (score > alpha)
+            alpha = score;
+        if (alpha >= beta)
+        {
+            tt.store(key, bestScore, bestMove, depth, TT_BETA);
+            return bestScore;
+        }
     }
+
+    TTFlag flag = (bestScore <= origAlpha) ? TT_ALPHA : TT_EXACT;
+    tt.store(key, bestScore, bestMove, depth, flag);
+
+    return bestScore;
 }
 
 SearchResult search(Board &board, int depth)
 {
     node_count = 0;
+
     auto start = std::chrono::high_resolution_clock::now();
 
     Movelist moves;
     movegen::legalmoves(moves, board);
 
-    Move best_move = moves[0];
-    bool white_to_play = board.sideToMove() == Color::WHITE;
+    sort_moves(moves, board);
 
+    Move best_move = moves[0];
+    int best_eval = -INF;
     int alpha = -INF;
     int beta = INF;
 
-    int best_eval = white_to_play ? -INF : INF;
-
-    if (white_to_play)
+    for (int i = 0; i < moves.size(); i++)
     {
-        for (int i = 0; i < moves.size(); i++)
-        {
-            board.makeMove(moves[i]);
-            int eval = minimax(board, depth - 1, false, alpha, beta);
-            board.unmakeMove(moves[i]);
+        board.makeMove(moves[i]);
+        int eval = -negamax(board, depth - 1, -beta, -alpha);
+        board.unmakeMove(moves[i]);
 
-            if (eval > best_eval)
-            {
-                best_eval = eval;
-                best_move = moves[i];
-            }
-            if (best_eval > alpha)
-                alpha = best_eval;
-        }
-    }
-    else
-    {
-        for (int i = 0; i < moves.size(); i++)
+        if (eval > best_eval)
         {
-            board.makeMove(moves[i]);
-            int eval = minimax(board, depth - 1, true, alpha, beta);
-            board.unmakeMove(moves[i]);
-
-            if (eval < best_eval)
-            {
-                best_eval = eval;
-                best_move = moves[i];
-            }
-            if (best_eval < beta)
-                beta = best_eval;
+            best_eval = eval;
+            best_move = moves[i];
         }
+        if (eval > alpha)
+            alpha = eval;
     }
 
     auto end = std::chrono::high_resolution_clock::now();

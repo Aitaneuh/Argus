@@ -21,7 +21,8 @@ static int score_move(const Board &board, const Move &move)
     if (victim_piece != Piece::NONE)
     {
         PieceType victim = victim_piece.type();
-        return piece_values[victim] - piece_values[attacker];
+        int score = piece_values[victim] - piece_values[attacker];
+        return board.sideToMove() == Color::WHITE ? score : -score;
     }
 
     return 0;
