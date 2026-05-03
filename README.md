@@ -15,7 +15,7 @@ The engine is in early development — the core search and eval are functional, 
 ## Features
 
 - **UCI protocol** — fully implemented, plug into any GUI out of the box
-- **Alpha-beta search** — minimax with alpha-beta pruning
+- **Alpha-beta search** — negamax with alpha-beta pruning
 - **Material evaluation** — centipawn-accurate piece values
 - **Move ordering** — skeleton in place, MVV-LVA coming next
 - **Legal move generation** — via [chess-library by Disservin](https://github.com/Disservin/chess-library)
@@ -52,6 +52,7 @@ Argus/
 - Ninja (recommended)
 
 > On Windows, use the **MSYS2 UCRT64** terminal. Install dependencies with:
+>
 > ```bash
 > pacman -S mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
 > ```
@@ -74,14 +75,14 @@ cmake --build build --target Perft
 
 Expected output from the starting position:
 
-| Depth | Nodes |
-|-------|-------|
-| 1 | 20 |
-| 2 | 400 |
-| 3 | 8,902 |
-| 4 | 197,281 |
-| 5 | 4,865,609 |
-| 6 | 119,060,324 |
+| Depth | Nodes       |
+| ----- | ----------- |
+| 1     | 20          |
+| 2     | 400         |
+| 3     | 8,902       |
+| 4     | 197,281     |
+| 5     | 4,865,609   |
+| 6     | 119,060,324 |
 
 ---
 
@@ -122,7 +123,7 @@ go
 - [x] Legal move generation
 - [x] Alpha-beta pruning
 - [x] Material evaluation
-- [X] MVV-LVA move ordering
+- [x] MVV-LVA move ordering
 - [ ] Piece-square tables (PST)
 - [ ] Iterative deepening
 - [ ] Transposition table
