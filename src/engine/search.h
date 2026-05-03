@@ -9,5 +9,5 @@ struct SearchResult
     int nps;
 };
 
-int minimax(chess::Board &board, int depth, bool white_to_play, int alpha, int beta);
+int negamax(chess::Board &board, int depth, bool white_to_play, int alpha, int beta);
 SearchResult search(chess::Board &board, int depth);
