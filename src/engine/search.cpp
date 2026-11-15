@@ -3,12 +3,15 @@
 #include "evaluate.h"
 #include "tt.h"
 #include "chess.hpp"
+#include "polyglot.h"
+#include "syzygy.h"
 #include <chrono>
 
 using namespace chess;
 
 const int INF = 99999999;
 static int node_count = 0;
+bool use_book = true;
 
 int negamax(Board &board, int depth, int alpha, int beta)
 {
@@ -29,6 +32,14 @@ int negamax(Board &board, int depth, int alpha, int beta)
             alpha = std::max(alpha, entry->score);
         if (alpha >= beta)
             return entry->score;
+    }
+
+    // --- Syzygy endgame tablebase probe ---
+    if (auto tb = syzygy_probe_wdl(board))
+    {
+        int score = *tb > 0 ? *tb + depth : *tb < 0 ? *tb - depth : 0;
+        tt.store(key, score, 0, depth, TT_EXACT);
+        return score;
     }
 
     if (depth == 0)
@@ -76,6 +87,15 @@ int negamax(Board &board, int depth, int alpha, int beta)
 
 SearchResult search(Board &board, int depth)
 {
+    // 1) Opening book
+    if (use_book)
+        if (auto bm = polyglot_pick(board))
+            return {*bm, 0, 0, 0, "book"};
+
+    // 2) Endgame tablebase (perfect play when few pieces are left)
+    if (auto tb = syzygy_probe_root(board))
+        return {tb->move, tb->score, 0, 0, "syzygy"};
+
     node_count = 0;
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -107,7 +127,7 @@ SearchResult search(Board &board, int depth)
 
     auto end = std::chrono::high_resolution_clock::now();
     int elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    int nps = elapsed_ms > 0 ? (node_count * 1000) / elapsed_ms : 0;
+    int nps = elapsed_ms > 0 ? static_cast<int>((node_count * 1000LL) / elapsed_ms) : 0;
 
-    return {best_move, best_eval, node_count, nps};
+    return {best_move, best_eval, node_count, nps, "search"};
 }

@@ -7,7 +7,10 @@ struct SearchResult
     int score_cp;
     int nodes;
     int nps;
+    const char *source; // "book", "syzygy" or "search"
 };
 
-int negamax(chess::Board &board, int depth, bool white_to_play, int alpha, int beta);
+extern bool use_book;
+
+int negamax(chess::Board &board, int depth, int alpha, int beta);
 SearchResult search(chess::Board &board, int depth);

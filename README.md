@@ -127,7 +127,8 @@ go
 - [ ] Iterative deepening
 - [ ] Transposition table
 - [ ] Time management
-- [ ] Opening book
+- [x] Opening book (Polyglot `.bin`)
+- [x] Syzygy endgame tablebases (via Fathom)
 
 ---
 
