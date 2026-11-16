@@ -116,6 +116,19 @@ go
 
 ---
 
+## Strength Estimate (STS)
+
+`tests/sts/sts.py` runs the [Strategic Test Suite](https://github.com/fsmosca/STS-Rating)
+(1500 positions, 15 themes) and turns the score into a rough Elo estimate
+(`Elo ≈ 44.523 × score% − 242.85`, about ±150). Build the engine first, then:
+
+```bash
+python tests/sts/sts.py          # full suite (~25 min)
+python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
+```
+
+---
+
 ## Roadmap
 
 - [x] UCI communication
@@ -135,6 +148,8 @@ go
 ## Dependencies
 
 - [chess-library](https://github.com/Disservin/chess-library) by Disservin — header-only move generation library
+- [Fathom](https://github.com/jdart1/Fathom) — Syzygy tablebase probing
+- [STS-Rating](https://github.com/fsmosca/STS-Rating) by fsmosca — STS positions and Elo formula
 
 ---
 

@@ -3,6 +3,8 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 
 using namespace chess;
 
@@ -84,23 +86,35 @@ std::optional<Move> polyglot_pick(const Board &board)
     movegen::legalmoves(legal, board);
 
     std::vector<std::pair<Move, int>> cands;
-    int total = 0;
     for (; it != book.end() && it->key == key; ++it)
         for (const Move &m : legal)
             if (encode(m) == it->move && it->weight > 0)
             {
                 cands.push_back({m, it->weight});
-                total += it->weight;
                 break;
             }
 
     if (cands.empty()) return std::nullopt;
 
-    static std::mt19937 rng{std::random_device{}()};
-    int r = std::uniform_int_distribution<int>(0, total - 1)(rng);
+    // Variety: the raw weights are "how often GMs played it", so the main line
+    // would be picked almost every time. Instead:
+    //  - drop rare moves (less than 1/16 of the most popular one), they are often dubious
+    //  - pick among the rest with sqrt(weight), which flattens the odds
+    int maxWeight = 0;
+    for (auto &c : cands) maxWeight = std::max(maxWeight, c.second);
+
+    std::vector<Move> moves;
+    std::vector<double> odds;
     for (auto &[m, w] : cands)
-    {
-        if ((r -= w) < 0) return m;
-    }
-    return cands[0].first;
+        if (w * 16 >= maxWeight)
+        {
+            moves.push_back(m);
+            odds.push_back(std::sqrt(static_cast<double>(w)));
+        }
+
+    // Seed from both random_device and the clock, so every game differs
+    static std::mt19937 rng{std::random_device{}() ^
+                            static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count())};
+    std::discrete_distribution<size_t> pick(odds.begin(), odds.end());
+    return moves[pick(rng)];
 }
