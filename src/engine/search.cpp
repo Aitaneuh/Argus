@@ -58,6 +58,12 @@ static int eval_stm(Board &board)
 // the entry stays correct when the same position is reached at another ply.
 static constexpr int WIN_BOUND = TB_WIN_SCORE - 1000;
 
+// Pruning margins (centipawns)
+static constexpr int DELTA_MARGIN = 200;                       // qsearch delta pruning
+static constexpr int FUTILITY_MARGIN[4] = {0, 100, 200, 300}; // by remaining depth
+static constexpr int RFP_MARGIN = 90;                          // reverse futility, per ply
+static constexpr int ASPIRATION_DELTA = 25;                    // initial half-window
+
 static int score_to_tt(int score, int ply)
 {
     if (score > WIN_BOUND) return score + ply;
@@ -105,6 +111,18 @@ static int qsearch(Board &board, int alpha, int beta, int ply)
     int best = stand_pat;
     for (const Move &move : moves)
     {
+        // Losing captures (negative SEE, see sort_moves) can't help us here.
+        if (move.score() < 0) continue;
+
+        // Delta pruning: even winning the victim with a margin wouldn't
+        // bring us back to alpha, so don't bother (promotions excepted).
+        if (move.typeOf() != Move::PROMOTION)
+        {
+            PieceType victim = move.typeOf() == Move::ENPASSANT ? PieceType(PieceType::PAWN)
+                                                               : board.at(move.to()).type();
+            if (stand_pat + see_value(victim) + DELTA_MARGIN <= alpha) continue;
+        }
+
         board.makeMove(move);
         int score = -qsearch(board, -beta, -alpha, ply + 1);
         board.unmakeMove(move);
@@ -181,12 +199,24 @@ static int negamax(Board &board, int depth, int alpha, int beta, int ply, bool a
         }
     }
 
+    // PV nodes have an open window; the others are zero-window "is it
+    // better than alpha?" checks, where we can prune more aggressively.
+    const bool pv_node = beta - alpha > 1;
+    const int static_eval = in_check ? -INF : eval_stm(board);
+
+    // --- Reverse futility pruning (static null move) ---
+    // Close to the leaves, if we are so far above beta that even giving
+    // back a margin per ply keeps us above it, just return.
+    if (!pv_node && !in_check && depth <= 4 && std::abs(beta) < WIN_BOUND &&
+        static_eval - RFP_MARGIN * depth >= beta)
+        return static_eval;
+
     // --- Null move pruning ---
     // If we skip our turn and the opponent still can't bring the score below
     // beta, our position is so good that a real move will also fail high.
     // Not done in check or with only pawns left (zugzwang danger).
     if (allow_null && !root && !in_check && depth >= 3 && std::abs(beta) < WIN_BOUND &&
-        has_non_pawn_material(board) && eval_stm(board) >= beta)
+        has_non_pawn_material(board) && static_eval >= beta)
     {
         int R = depth >= 7 ? 3 : 2;
         board.makeNullMove();
@@ -208,12 +238,28 @@ static int negamax(Board &board, int depth, int alpha, int beta, int ply, bool a
     int best = -INF;
     uint16_t best_move = 0;
 
+    // --- Futility pruning ---
+    // Near the leaves, if the static eval plus a generous margin still can't
+    // reach alpha, quiet moves won't save us: only captures, promotions and
+    // checks are searched.
+    const bool can_futility = !pv_node && !in_check && depth <= 3 && std::abs(alpha) < WIN_BOUND &&
+                              static_eval + FUTILITY_MARGIN[depth] <= alpha;
+
     for (int i = 0; i < moves.size(); i++)
     {
         const Move move = moves[i];
         const bool quiet = !board.isCapture(move) && move.typeOf() != Move::PROMOTION;
 
         board.makeMove(move);
+
+        if (can_futility && i > 0 && quiet && !board.inCheck())
+        {
+            board.unmakeMove(move);
+            // Fail-soft: this move is worth at most eval + margin
+            best = std::max(best, static_eval + FUTILITY_MARGIN[depth]);
+            continue;
+        }
+
         int score;
 
         if (i == 0)
@@ -359,10 +405,41 @@ SearchResult search(Board board, const SearchLimits &lim)
     else if (lim.time < 0 && lim.movetime < 0 && !lim.infinite)
         max_depth = 8; // plain "go" with no limits (handy when typing by hand)
 
+    int prev_score = 0;
     for (int depth = 1; depth <= max_depth; depth++)
     {
-        root_best = Move(Move::NO_MOVE);
-        int score = negamax(board, depth, -INF, INF, 0, false);
+        // Aspiration windows: the score rarely moves much between two
+        // iterations, so search a narrow window around the last one (more
+        // cutoffs). If the result falls outside it, widen and search again.
+        int delta = ASPIRATION_DELTA;
+        int alpha = -INF, beta = INF;
+        if (depth >= 5 && std::abs(prev_score) < WIN_BOUND)
+        {
+            alpha = prev_score - delta;
+            beta = prev_score + delta;
+        }
+
+        int score;
+        while (true)
+        {
+            root_best = Move(Move::NO_MOVE);
+            score = negamax(board, depth, alpha, beta, 0, false);
+            if (time_up) break;
+
+            if (score <= alpha) // fail low: we are worse than we thought
+            {
+                beta = (alpha + beta) / 2;
+                alpha = std::max(score - delta, -INF);
+            }
+            else if (score >= beta) // fail high: better than we thought
+                beta = std::min(score + delta, INF);
+            else
+                break;
+
+            delta *= 2;
+            if (delta > 1000) alpha = -INF, beta = INF; // give up, full window
+        }
+        prev_score = score;
 
         // An interrupted iteration is incomplete: keep the previous result.
         if (time_up && depth > 1) break;

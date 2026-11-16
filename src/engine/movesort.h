@@ -16,5 +16,13 @@ void clear_move_ordering();
 void sort_moves(chess::Movelist &moves, const chess::Board &board,
                 uint16_t tt_move = 0, int ply = 0);
 
+// Static Exchange Evaluation: true if playing `move` and then trading off every
+// piece attacking the target square (cheapest first) wins at least `threshold`
+// centipawns for the side to move. see_ge(m, 0) = "this capture doesn't lose material".
+bool see_ge(const chess::Board &board, const chess::Move &move, int threshold);
+
+// Rough piece value used by SEE and delta pruning (P N B R Q K NONE).
+int see_value(chess::PieceType pt);
+
 // Called when a quiet move causes a beta cutoff, so it gets tried earlier next time.
 void record_quiet_cutoff(const chess::Board &board, const chess::Move &move, int ply, int depth);

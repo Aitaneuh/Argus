@@ -8,18 +8,20 @@ A UCI-compatible chess engine written in C++17, built from scratch with a focus 
 
 Argus is a classical chess engine that uses an alpha-beta search with iterative deepening to find the best move in a given position. It communicates via the UCI protocol, meaning it plugs directly into any major chess GUI (CuteChess, Arena, etc.) without any extra configuration.
 
-The engine is in active development. Latest STS estimate: **~2420 Elo (v5)**, see [Strength Estimate](#strength-estimate-sts).
+The engine is in active development. Latest STS estimate: **~2560 Elo (v6)**, see [Strength Estimate](#strength-estimate-sts).
 
 ---
 
 ## Features
 
 - **UCI protocol** — plug into any GUI out of the box, search runs on its own thread (`stop` works)
-- **Search** — negamax alpha-beta, iterative deepening, principal variation search,
-  quiescence search, null move pruning, late move reductions, check extension
+- **Search** — negamax alpha-beta, iterative deepening with aspiration windows,
+  principal variation search, quiescence search (SEE + delta pruning), null move pruning,
+  late move reductions, futility and reverse futility pruning, check extension
 - **Time management** — uses `wtime/btime/winc/binc/movestogo/movetime`, or `go depth N` / `go infinite`
 - **Transposition table** — configurable with the `Hash` option, mate-distance aware
-- **Move ordering** — TT move, MVV-LVA captures, killer moves, history heuristic
+- **Move ordering** — TT move, MVV-LVA captures, killer moves, history heuristic,
+  losing captures (negative SEE) sorted last
 - **Evaluation** — tapered piece-square tables (PeSTO values), middlegame/endgame blend,
   pawn structure (doubled, isolated, passed pawns), piece mobility,
   king safety (pawn shield, open files near the king, king-zone attacks)
@@ -154,7 +156,10 @@ python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
 | v4 (PST, qsearch, iterative deepening, time management) | 57.6% | ~2320 |
 | v5 (pawn structure, king safety, mobility) | 59.9% | ~2420 |
 
-Run side by side on the same machine, v4 scored 55.7% and v5 59.9% (+4.2 points).
+| v6 (aspiration windows, SEE, futility pruning) | 62.9% | ~2560 |
+
+Each new version is also run side by side with the previous one on the same machine:
+v4 55.7% vs v5 59.9% (+4.2), v5 59.3% vs v6 62.9% (+3.6).
 
 ---
 
@@ -174,7 +179,7 @@ Run side by side on the same machine, v4 scored 55.7% and v5 59.9% (+4.2 points)
 - [x] Opening book (Polyglot `.bin`)
 - [x] Syzygy endgame tablebases (via Fathom)
 - [x] Pawn structure / king safety / mobility eval
-- [ ] Aspiration windows, SEE, futility pruning
+- [x] Aspiration windows, SEE, futility pruning
 
 ---
 
