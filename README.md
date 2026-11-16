@@ -155,7 +155,6 @@ python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
 | v3 (material only, fixed depth 6) | 31.1% | ~1140 |
 | v4 (PST, qsearch, iterative deepening, time management) | 57.6% | ~2320 |
 | v5 (pawn structure, king safety, mobility) | 59.9% | ~2420 |
-
 | v6 (aspiration windows, SEE, futility pruning) | 62.9% | ~2560 |
 
 Each new version is also run side by side with the previous one on the same machine:
