@@ -8,7 +8,7 @@ A UCI-compatible chess engine written in C++17, built from scratch with a focus 
 
 Argus is a classical chess engine that uses an alpha-beta search with iterative deepening to find the best move in a given position. It communicates via the UCI protocol, meaning it plugs directly into any major chess GUI (CuteChess, Arena, etc.) without any extra configuration.
 
-The engine is in active development. Latest STS estimate: **~2320 Elo (v4)**, see [Strength Estimate](#strength-estimate-sts).
+The engine is in active development. Latest STS estimate: **~2420 Elo (v5)**, see [Strength Estimate](#strength-estimate-sts).
 
 ---
 
@@ -20,7 +20,9 @@ The engine is in active development. Latest STS estimate: **~2320 Elo (v4)**, se
 - **Time management** — uses `wtime/btime/winc/binc/movestogo/movetime`, or `go depth N` / `go infinite`
 - **Transposition table** — configurable with the `Hash` option, mate-distance aware
 - **Move ordering** — TT move, MVV-LVA captures, killer moves, history heuristic
-- **Evaluation** — tapered piece-square tables (PeSTO values), middlegame/endgame blend
+- **Evaluation** — tapered piece-square tables (PeSTO values), middlegame/endgame blend,
+  pawn structure (doubled, isolated, passed pawns), piece mobility,
+  king safety (pawn shield, open files near the king, king-zone attacks)
 - **Draw detection** — repetition, 50-move rule, insufficient material
 - **Opening book** — Polyglot `.bin` (`gm2001.bin`), varied move choice
 - **Endgame tablebases** — Syzygy via Fathom (put the files in `build/syzygy/`)
@@ -40,7 +42,7 @@ Argus/
 │   ├── main.cpp
 │   ├── engine/
 │   │   ├── search.h / search.cpp     # Iterative deepening, alpha-beta, qsearch, time
-│   │   ├── evaluate.h / evaluate.cpp # Tapered PST evaluation
+│   │   ├── evaluate.h / evaluate.cpp # Tapered PST + pawns, mobility, king safety
 │   │   ├── movesort.h / movesort.cpp # Move ordering (TT move, MVV-LVA, killers, history)
 │   │   ├── tt.h / tt.cpp             # Transposition table
 │   │   ├── polyglot.*                # Opening book
@@ -150,6 +152,9 @@ python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
 |---------|-----------|---------------|
 | v3 (material only, fixed depth 6) | 31.1% | ~1140 |
 | v4 (PST, qsearch, iterative deepening, time management) | 57.6% | ~2320 |
+| v5 (pawn structure, king safety, mobility) | 59.9% | ~2420 |
+
+Run side by side on the same machine, v4 scored 55.7% and v5 59.9% (+4.2 points).
 
 ---
 
@@ -168,7 +173,7 @@ python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
 - [x] Null move pruning, LMR, PVS, killers, history
 - [x] Opening book (Polyglot `.bin`)
 - [x] Syzygy endgame tablebases (via Fathom)
-- [ ] Pawn structure / king safety / mobility eval
+- [x] Pawn structure / king safety / mobility eval
 - [ ] Aspiration windows, SEE, futility pruning
 
 ---

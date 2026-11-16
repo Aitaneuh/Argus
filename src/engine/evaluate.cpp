@@ -1,5 +1,6 @@
 #include "chess.hpp"
 #include "evaluate.h"
+#include <cstdint>
 
 using namespace chess;
 
@@ -155,6 +156,76 @@ static const int eg_king[64] = {
 static const int *mg_table[6] = {mg_pawn, mg_knight, mg_bishop, mg_rook, mg_queen, mg_king};
 static const int *eg_table[6] = {eg_pawn, eg_knight, eg_bishop, eg_rook, eg_queen, eg_king};
 
+// ---------------------------------------------------------------------------
+// Positional terms on top of the PST (v5).
+//
+// All values are {middlegame, endgame} pairs and go through the same tapered
+// blend as the PST. They are hand-picked classic values (not tuned yet).
+// ---------------------------------------------------------------------------
+
+typedef std::uint64_t U64;
+
+static inline int popcnt(U64 b) { return __builtin_popcountll(b); }
+static inline int lsb(U64 b) { return __builtin_ctzll(b); }
+
+static constexpr U64 FILE_A = 0x0101010101010101ULL;
+static constexpr U64 FILE_H = FILE_A << 7;
+
+static U64 FILE_BB[8];
+static U64 ADJ_FILES[8];
+static U64 PASSED_MASK[2][64]; // squares in front of a pawn (own + adjacent files)
+
+static struct MaskInit
+{
+    MaskInit()
+    {
+        for (int f = 0; f < 8; f++)
+            FILE_BB[f] = FILE_A << f;
+        for (int f = 0; f < 8; f++)
+            ADJ_FILES[f] = (f > 0 ? FILE_BB[f - 1] : 0) | (f < 7 ? FILE_BB[f + 1] : 0);
+        for (int sq = 0; sq < 64; sq++)
+        {
+            int f = sq & 7, r = sq >> 3;
+            U64 files = FILE_BB[f] | ADJ_FILES[f];
+            U64 above = 0, below = 0;
+            for (int rr = r + 1; rr < 8; rr++)
+                above |= 0xFFULL << (8 * rr);
+            for (int rr = 0; rr < r; rr++)
+                below |= 0xFFULL << (8 * rr);
+            PASSED_MASK[0][sq] = files & above;
+            PASSED_MASK[1][sq] = files & below;
+        }
+    }
+} mask_init;
+
+static inline U64 pawn_attacks(U64 pawns, int c)
+{
+    if (c == 0)
+        return ((pawns << 7) & ~FILE_H) | ((pawns << 9) & ~FILE_A);
+    return ((pawns >> 9) & ~FILE_H) | ((pawns >> 7) & ~FILE_A);
+}
+
+// --- Pawn structure ---
+static const int DOUBLED_MG = -10, DOUBLED_EG = -25;   // per extra pawn on a file
+static const int ISOLATED_MG = -12, ISOLATED_EG = -15; // no friendly pawn on adjacent files
+// Passed pawn bonus by relative rank. The PST already rewards advanced pawns
+// a lot, so these stay moderate.
+static const int PASSED_MG[8] = {0, 0, 5, 10, 20, 35, 60, 0};
+static const int PASSED_EG[8] = {0, 5, 10, 20, 40, 70, 110, 0};
+
+// --- Mobility: bonus per reachable square, centred on a "normal" count ---
+//                            N  B  R  Q
+static const int MOB_MG[4]   = {4, 5, 2, 1};
+static const int MOB_EG[4]   = {4, 5, 4, 2};
+static const int MOB_BASE[4] = {4, 6, 6, 12};
+
+// --- King safety (middlegame only) ---
+static const int SHIELD_1 = 12; // own pawn right in front of the king
+static const int SHIELD_2 = 6;  // own pawn two squares in front
+static const int SHIELD_MISSING = -14;
+static const int OPEN_FILE_NEAR_KING = -12;       // no own pawn on a file next to the king
+static const int ATTACK_WEIGHT[4] = {2, 2, 3, 5}; // N B R Q, per attacked king-zone square
+
 int evaluate(Board &board)
 {
     int mg[2] = {0, 0}; // [WHITE, BLACK]
@@ -179,6 +250,114 @@ int evaluate(Board &board)
                 eg[c] += eg_value[pt] + eg_table[pt][idx];
                 phase += phase_inc[pt];
             }
+        }
+    }
+
+    const U64 occ = board.occ().getBits();
+    U64 pawns[2], pawnAtt[2], own[2], kingZone[2];
+    int kingSq[2];
+    for (int c = 0; c < 2; c++)
+    {
+        Color color = static_cast<Color::underlying>(c);
+        pawns[c] = board.pieces(PieceType::PAWN, color).getBits();
+        pawnAtt[c] = pawn_attacks(pawns[c], c);
+        own[c] = board.us(color).getBits();
+        kingSq[c] = board.kingSq(color).index();
+        kingZone[c] = attacks::king(Square(kingSq[c])).getBits() | (1ULL << kingSq[c]);
+    }
+
+    int attackWeight[2] = {0, 0}; // pressure by side c on the enemy king
+    int attackers[2] = {0, 0};
+
+    for (int c = 0; c < 2; c++)
+    {
+        const int them = c ^ 1;
+        Color color = static_cast<Color::underlying>(c);
+
+        // ---- Pawn structure ----
+        for (int f = 0; f < 8; f++)
+        {
+            int n = popcnt(pawns[c] & FILE_BB[f]);
+            if (n > 1)
+            {
+                mg[c] += DOUBLED_MG * (n - 1);
+                eg[c] += DOUBLED_EG * (n - 1);
+            }
+            if (n && !(pawns[c] & ADJ_FILES[f]))
+            {
+                mg[c] += ISOLATED_MG * n;
+                eg[c] += ISOLATED_EG * n;
+            }
+        }
+        for (U64 b = pawns[c]; b; b &= b - 1)
+        {
+            int sq = lsb(b);
+            if (!(PASSED_MASK[c][sq] & pawns[them]))
+            {
+                int rel = c == 0 ? (sq >> 3) : 7 - (sq >> 3);
+                mg[c] += PASSED_MG[rel];
+                eg[c] += PASSED_EG[rel];
+            }
+        }
+
+        // ---- Mobility + attacks on the enemy king zone ----
+        // Squares attacked by enemy pawns don't count as "mobile".
+        const U64 area = ~own[c] & ~pawnAtt[them];
+        for (int i = 0; i < 4; i++)
+        {
+            PieceType type = static_cast<PieceType::underlying>(i + 1); // N B R Q
+            for (U64 b = board.pieces(type, color).getBits(); b; b &= b - 1)
+            {
+                Square sq(lsb(b));
+                U64 att;
+                switch (i)
+                {
+                case 0: att = attacks::knight(sq).getBits(); break;
+                case 1: att = attacks::bishop(sq, occ).getBits(); break;
+                case 2: att = attacks::rook(sq, occ).getBits(); break;
+                default: att = attacks::queen(sq, occ).getBits(); break;
+                }
+                int mob = popcnt(att & area) - MOB_BASE[i];
+                mg[c] += MOB_MG[i] * mob;
+                eg[c] += MOB_EG[i] * mob;
+
+                U64 hit = att & kingZone[them];
+                if (hit)
+                {
+                    attackers[c]++;
+                    attackWeight[c] += ATTACK_WEIGHT[i] * popcnt(hit);
+                }
+            }
+        }
+
+        // ---- King pawn shield / open files near the king (middlegame) ----
+        const int kf = kingSq[c] & 7, kr = kingSq[c] >> 3;
+        const int dir = c == 0 ? 1 : -1;
+        for (int f = (kf > 0 ? kf - 1 : 0); f <= (kf < 7 ? kf + 1 : 7); f++)
+        {
+            int r1 = kr + dir, r2 = kr + 2 * dir;
+            if (r1 >= 0 && r1 < 8 && (pawns[c] & (1ULL << (r1 * 8 + f))))
+                mg[c] += SHIELD_1;
+            else if (r2 >= 0 && r2 < 8 && (pawns[c] & (1ULL << (r2 * 8 + f))))
+                mg[c] += SHIELD_2;
+            else
+                mg[c] += SHIELD_MISSING;
+
+            if (!(pawns[c] & FILE_BB[f]))
+                mg[c] += OPEN_FILE_NEAR_KING;
+        }
+    }
+
+    // King attack: only counts with 2+ attackers and the queen still on.
+    // Quadratic, so piling up pieces on the king hurts more and more.
+    for (int c = 0; c < 2; c++)
+    {
+        Color color = static_cast<Color::underlying>(c);
+        if (attackers[c] >= 2 && board.pieces(PieceType::QUEEN, color))
+        {
+            int w = attackWeight[c];
+            int danger = w * w / 2;
+            mg[c] += danger > 500 ? 500 : danger;
         }
     }
 
