@@ -6,18 +6,24 @@ A UCI-compatible chess engine written in C++17, built from scratch with a focus 
 
 ## Overview
 
-Argus is a classical chess engine that uses alpha-beta pruning to search for the best move in a given position. It communicates via the UCI protocol, meaning it plugs directly into any major chess GUI (CuteChess, Arena, etc.) without any extra configuration.
+Argus is a classical chess engine that uses an alpha-beta search with iterative deepening to find the best move in a given position. It communicates via the UCI protocol, meaning it plugs directly into any major chess GUI (CuteChess, Arena, etc.) without any extra configuration.
 
-The engine is in early development — the core search and eval are functional, and the architecture is designed to make adding stronger features straightforward.
+The engine is in active development. Latest STS estimate: **~2320 Elo (v4)**, see [Strength Estimate](#strength-estimate-sts).
 
 ---
 
 ## Features
 
-- **UCI protocol** — fully implemented, plug into any GUI out of the box
-- **Alpha-beta search** — minimax with alpha-beta pruning
-- **Material evaluation** — centipawn-accurate piece values
-- **Move ordering** — skeleton in place, MVV-LVA coming next
+- **UCI protocol** — plug into any GUI out of the box, search runs on its own thread (`stop` works)
+- **Search** — negamax alpha-beta, iterative deepening, principal variation search,
+  quiescence search, null move pruning, late move reductions, check extension
+- **Time management** — uses `wtime/btime/winc/binc/movestogo/movetime`, or `go depth N` / `go infinite`
+- **Transposition table** — configurable with the `Hash` option, mate-distance aware
+- **Move ordering** — TT move, MVV-LVA captures, killer moves, history heuristic
+- **Evaluation** — tapered piece-square tables (PeSTO values), middlegame/endgame blend
+- **Draw detection** — repetition, 50-move rule, insufficient material
+- **Opening book** — Polyglot `.bin` (`gm2001.bin`), varied move choice
+- **Endgame tablebases** — Syzygy via Fathom (put the files in `build/syzygy/`)
 - **Legal move generation** — via [chess-library by Disservin](https://github.com/Disservin/chess-library)
 
 ---
@@ -27,17 +33,23 @@ The engine is in early development — the core search and eval are functional, 
 ```
 Argus/
 ├── lib/
-│   └── chess-library/        # Disservin's chess-library (move generation)
+│   ├── chess-library/        # Disservin's chess-library (move generation)
+│   ├── fathom/               # Syzygy tablebase probing
+│   └── opening-book/         # gm2001.bin Polyglot book
 ├── src/
 │   ├── main.cpp
 │   ├── engine/
-│   │   ├── search.h / search.cpp     # Alpha-beta search
-│   │   ├── evaluate.h / evaluate.cpp # Position evaluation
-│   │   └── movesort.h / movesort.cpp # Move ordering
+│   │   ├── search.h / search.cpp     # Iterative deepening, alpha-beta, qsearch, time
+│   │   ├── evaluate.h / evaluate.cpp # Tapered PST evaluation
+│   │   ├── movesort.h / movesort.cpp # Move ordering (TT move, MVV-LVA, killers, history)
+│   │   ├── tt.h / tt.cpp             # Transposition table
+│   │   ├── polyglot.*                # Opening book
+│   │   └── syzygy.h / syzygy.cpp     # Endgame tablebases (Fathom wrapper)
 │   └── uci/
 │       └── uci.h / uci.cpp           # UCI protocol handler
 ├── tests/
-│   └── perft.cpp                     # Move generation correctness tests
+│   ├── perft.cpp                     # Move generation correctness tests
+│   └── sts/                          # STS test suite + Elo estimate script
 └── CMakeLists.txt
 ```
 
@@ -90,8 +102,11 @@ Expected output from the starting position:
 1. Download [CuteChess](https://github.com/cutechess/cutechess/releases)
 2. Go to **Tools → Engines → Add**
 3. Point the executable path to `build/Argus.exe`
-4. Set protocol to **UCI**
-5. Start a game
+4. Set the working directory to `build/` and the protocol to **UCI**
+5. Start a game (any time control works, Argus manages its clock)
+
+UCI options: `Hash` (MB), `OwnBook`, `BookFile`, `SyzygyPath`.
+By default Argus loads `gm2001.bin` and the `syzygy/` folder from next to the executable.
 
 ---
 
@@ -109,10 +124,14 @@ isready
 → readyok
 
 position startpos moves e2e4 e7e5
-go
-→ info depth 6 score cp 30 nodes 124000 nps 980000
+go movetime 1000
+→ info depth 1 score cp 63 nodes 32 nps 0 time 0 pv g1f3
+→ ...
+→ info depth 13 score cp 25 nodes 6900000 nps 7500000 time 920 pv g1f3 b8c6 ...
 → bestmove g1f3
 ```
+
+Plain `go` searches to depth 8, `go infinite` searches until `stop`.
 
 ---
 
@@ -123,9 +142,14 @@ go
 (`Elo ≈ 44.523 × score% − 242.85`, about ±150). Build the engine first, then:
 
 ```bash
-python tests/sts/sts.py          # full suite (~25 min)
+python tests/sts/sts.py          # full suite (~6 min, 0.2 s per position)
 python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
 ```
+
+| Version | STS score | Estimated Elo |
+|---------|-----------|---------------|
+| v3 (material only, fixed depth 6) | 31.1% | ~1140 |
+| v4 (PST, qsearch, iterative deepening, time management) | 57.6% | ~2320 |
 
 ---
 
@@ -136,12 +160,16 @@ python tests/sts/sts.py -n 300   # quick run, 20 positions per theme
 - [x] Alpha-beta pruning
 - [x] Material evaluation
 - [X] MVV-LVA move ordering
-- [ ] Piece-square tables (PST)
-- [ ] Iterative deepening
-- [ ] Transposition table
-- [ ] Time management
+- [x] Transposition table
+- [x] Piece-square tables (PST, tapered)
+- [x] Quiescence search
+- [x] Iterative deepening
+- [x] Time management
+- [x] Null move pruning, LMR, PVS, killers, history
 - [x] Opening book (Polyglot `.bin`)
 - [x] Syzygy endgame tablebases (via Fathom)
+- [ ] Pawn structure / king safety / mobility eval
+- [ ] Aspiration windows, SEE, futility pruning
 
 ---
 

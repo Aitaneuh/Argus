@@ -6,8 +6,14 @@ TranspositionTable tt(64);
 
 TranspositionTable::TranspositionTable(size_t mb)
 {
+    resize(mb);
+}
+
+void TranspositionTable::resize(size_t mb)
+{
     numEntries = (mb * 1024 * 1024) / sizeof(TTEntry);
-    entries.resize(numEntries);
+    if (numEntries == 0) numEntries = 1;
+    entries.assign(numEntries, TTEntry{});
 }
 
 void TranspositionTable::clear()

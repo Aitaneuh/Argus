@@ -24,6 +24,7 @@ class TranspositionTable
 public:
     explicit TranspositionTable(size_t mb = 64);
 
+    void resize(size_t mb);
     void clear();
     void store(uint64_t key, int score, uint16_t move, int depth, TTFlag flag);
     TTEntry *probe(uint64_t key);
